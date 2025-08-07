@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- FLIX - Unique Display font from Google Fonts or CDN -->
+  <link href="https://fonts.cdnfonts.com/css/flix-unique-display" rel="stylesheet">
+  <meta charset="UTF-8">
+  <title>PieBet Card Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Firebase App (the core Firebase SDK) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <!-- Firebase Auth -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <style>
+    /* FLIX - Unique Display font for the title */
+    .flix-title {
+      font-family: 'FLIX Unique Display', 'Arial Black', Arial, sans-serif;
+      letter-spacing: 0.04em;
+    }
+    body {
+      background: #EAEAEA;
+    }
+    .neumorph-card {
+      background: #EAEAEA;
+      border-radius: 28px;
+      box-shadow:
+        -9px -9px 16px #fff,
+        9px 9px 16px #d1d9e6;
+      /* Soft border effect */
+      transition: box-shadow 0.2s;
+    }
+    .neumorph-card:focus-within {
+      box-shadow:
+        -4px -4px 8px #fff,
+        4px 4px 8px #d1d9e6;
+    }
+    .neumorph-btn {
+      background: #EAEAEA;
+      border-radius: 18px;
+      box-shadow: none; /* Flat by default */
+      color: #888;
+      font-weight: 600;
+      border: 2px solid #e0e0e0;
+      outline: none;
+      transition: box-shadow 0.2s, color 0.2s, border-color 0.2s, background 0.2s;
+      box-sizing: border-box;
+    }
+    .neumorph-btn:active, .neumorph-btn:focus {
+      box-shadow:
+        -9px -9px 16px #fff,
+        9px 9px 16px #d1d9e6;
+      border-color: #b0b0b0;
+      background: #f5f5f5;
+      color: #222;
+    }
+    .neumorph-input {
+      background: #EAEAEA;
+      border-radius: 12px;
+      border: none;
+      box-shadow:
+        inset -2px -2px 4px #fff,
+        inset 2px 2px 4px #d1d9e6;
+      padding: 0.5rem 0.75rem;
+      font-size: 1rem;
+      color: #444;
+      outline: none;
+      transition: box-shadow 0.2s;
+    }
+    .neumorph-input:focus {
+      box-shadow:
+        0 0 0 2px #b0b0b0,
+        inset -2px -2px 4px #fff,
+        inset 2px 2px 4px #d1d9e6;
+    }
+    .neumorph-stats {
+      background: #EAEAEA;
+      border-radius: 10px;
+      box-shadow:
+        -2px -2px 4px #fff,
+        2px 2px 4px #d1d9e6;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.95rem;
+      color: #888;
+      text-align: center;
+    }
+    .neumorph-history {
+      background: #EAEAEA;
+      border-radius: 20px;
+      box-shadow:
+        -6px -6px 12px #fff,
+        6px 6px 12px #d1d9e6;
+      padding: 1rem 1.5rem;
+      margin-bottom: 1rem;
+    }
+    /* Responsive grid tweaks */
+    @media (max-width: 640px) {
+      .player-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 1rem !important;
+      }
+      .neumorph-card {
+        padding: 1rem !important;
+        min-width: 0 !important;
+      }
+      .neumorph-btn {
+        font-size: 1rem !important;
+        padding: 0.5rem 1rem !important;
+      }
+      .neumorph-input {
+        font-size: 1rem !important;
+        padding: 0.5rem 0.75rem !important;
+      }
+      #main-app {
+        padding: 0.5rem !important;
+      }
+      #header-title {
+        font-size: 1.5rem !important;
+        margin-bottom: 1.5rem !important;
+      }
+      #round-count {
+        font-size: 1rem !important;
+        padding-top: 0.5rem !important;
+        padding-bottom: 0.5rem !important;
+      }
+      .neumorph-history {
+        padding: 0.5rem 0.5rem !important;
+        font-size: 0.9rem !important;
+      }
+      .player-name-input, .player-bet-input {
+        font-size: 1rem !important;
+        min-width: 0 !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+      }
+      .remove-player-btn {
+        width: 2rem !important;
+        height: 2rem !important;
+        font-size: 1.2rem !important;
+      }
+      .neumorph-stats {
+        font-size: 0.9rem !important;
+        padding: 0.3rem 0.5rem !important;
+      }
+      #next-round-btn {
+        width: 100% !important;
+        font-size: 1.1rem !important;
+        padding: 0.7rem 0 !important;
+      }
+      #add-player-btn {
+        width: 2.2rem !important;
+        height: 2.2rem !important;
+        font-size: 1.3rem !important;
+      }
+      #history-list {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Auth Modal (Sign In / Sign Up) -->
+  <div id="auth-modal" style="position:fixed;z-index:50;top:0;left:0;width:100vw;height:100vh;background:rgba(234,234,234,0.98);display:flex;align-items:center;justify-content:center;">
+    <div class="neumorph-card p-8 flex flex-col gap-6 items-center" style="min-width:320px;max-width:90vw;">
+      <!-- Sign Up Form -->
+      <div id="signup-form" style="display:none;">
+        <div class="flix-title text-2xl font-extrabold text-gray-700 mb-2">Sign Up to Play</div>
+        <input id="signup-username" type="text" class="neumorph-input w-full text-lg" placeholder="Username" autocomplete="off" style="max-width:260px;" />
+        <input id="signup-email" type="email" class="neumorph-input w-full text-lg" placeholder="Email address" autocomplete="off" style="max-width:260px;" />
+        <input id="signup-password" type="password" class="neumorph-input w-full text-lg" placeholder="Password" autocomplete="off" style="max-width:260px;" />
+        <button id="signup-btn" class="neumorph-btn px-8 py-2 text-lg mt-2" style="background:#eaeaea;">Sign Up</button>
+        <div id="signup-error" class="text-red-600 text-sm mt-1" style="display:none;"></div>
+        <div id="confirm-section" style="display:none;width:100%;">
+          <div class="flix-title text-lg font-bold text-gray-700 mb-2">Confirm your email</div>
+          <div class="text-gray-600 text-sm mb-2">A confirmation code has been sent to your email.</div>
+          <input id="signup-code" type="text" class="neumorph-input w-full text-lg mb-2" placeholder="Enter confirmation code" style="max-width:260px;" />
+          <button id="confirm-btn" class="neumorph-btn px-8 py-2 text-lg" style="background:#eaeaea;">Confirm</button>
+          <div id="confirm-error" class="text-red-600 text-sm mt-1" style="display:none;"></div>
+        </div>
+        <div class="text-gray-500 text-sm mt-2">Already have an account? <a href="#" id="show-signin" class="text-blue-600 underline">Sign in</a></div>
+      </div>
+      <!-- Sign In Form -->
+      <div id="signin-form">
+        <div class="flix-title text-2xl font-extrabold text-gray-700 mb-2">Sign In</div>
+        <input id="signin-email" type="email" class="neumorph-input w-full text-lg" placeholder="Email address" autocomplete="off" style="max-width:260px;" />
+        <input id="signin-password" type="password" class="neumorph-input w-full text-lg" placeholder="Password" autocomplete="off" style="max-width:260px;" />
+        <button id="signin-btn" class="neumorph-btn px-8 py-2 text-lg mt-2" style="background:#eaeaea;">Sign In</button>
+        <div id="signin-error" class="text-red-600 text-sm mt-1" style="display:none;"></div>
+        <div class="flex flex-col items-center w-full mt-2">
+          <a href="#" id="show-forgot" class="text-blue-600 underline text-sm mb-1">Forgot password?</a>
+          <div class="text-gray-500 text-sm">Don't have an account? <a href="#" id="show-signup" class="text-blue-600 underline">Sign up</a></div>
+        </div>
+        <div class="w-full flex flex-col items-center mt-4">
+          <div class="w-full border-t border-gray-300 my-2"></div>
+          <button id="google-login-btn" class="flex items-center justify-center gap-2 w-full py-2 px-4 rounded-md border border-gray-300 bg-white hover:bg-gray-100 text-gray-700 font-semibold shadow-sm" style="max-width:260px;">
+            <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" style="width:22px;height:22px;" />
+            <span>Login with Google</span>
+          </button>
+        </div>
+      </div>
+      <!-- Forgot Password Form -->
+      <div id="forgot-form" style="display:none;">
+        <div class="flix-title text-2xl font-extrabold text-gray-700 mb-2">Reset Password</div>
+        <input id="forgot-email" type="email" class="neumorph-input w-full text-lg mb-2" placeholder="Email address" autocomplete="off" style="max-width:260px;" />
+        <button id="forgot-send-btn" class="neumorph-btn px-8 py-2 text-lg mb-2" style="background:#eaeaea;">Send Code</button>
+        <div id="forgot-error" class="text-red-600 text-sm mb-1" style="display:none;"></div>
+        <div id="forgot-confirm-section" style="display:none;width:100%;">
+          <div class="text-gray-600 text-sm mb-2">A reset code has been sent to your email.</div>
+          <input id="forgot-code" type="text" class="neumorph-input w-full text-lg mb-2" placeholder="Enter code" style="max-width:260px;" />
+          <input id="forgot-new-password" type="password" class="neumorph-input w-full text-lg mb-2" placeholder="New password" style="max-width:260px;" />
+          <button id="forgot-confirm-btn" class="neumorph-btn px-8 py-2 text-lg" style="background:#eaeaea;">Reset Password</button>
+          <div id="forgot-confirm-error" class="text-red-600 text-sm mt-1" style="display:none;"></div>
+        </div>
+        <div class="text-gray-500 text-sm mt-2">Remembered? <a href="#" id="show-signin2" class="text-blue-600 underline">Sign in</a></div>
+      </div>
+    </div>
+  </div>
+  <div id="main-app" style="display:none;">
+    <!-- Friend List Button and Modal -->
+    <button id="friend-list-btn" class="neumorph-btn fixed z-40" style="bottom:100px;right:32px;min-width:44px;min-height:44px;box-shadow: -4px -4px 8px #fff, 4px 4px 8px #d1d9e6;">
+      <span title="Friends" style="font-size:1.5rem;">👥</span>
+    </button>
+    <div id="friend-list-modal" style="display:none;position:fixed;z-index:70;top:0;left:0;width:100vw;height:100vh;background:rgba(234,234,234,0.97);align-items:center;justify-content:center;">
+      <div class="neumorph-card p-8 flex flex-col gap-4 items-center" style="min-width:320px;max-width:90vw;">
+        <div class="flix-title text-2xl font-extrabold text-gray-700 mb-2">Friend List</div>
+        <ul id="friend-list" class="w-full mb-2" style="max-width:300px;"></ul>
+        <div class="w-full mb-2" style="max-width:300px;">
+          <div class="text-gray-700 font-semibold mb-1" style="font-size:1rem;">Pending Requests</div>
+          <ul id="pending-list"></ul>
+        </div>
+        <button id="add-friend-btn" class="neumorph-btn px-4 py-2 text-base">Add Friend</button>
+        <button id="close-friend-list-btn" class="neumorph-btn px-4 py-2 text-base">Close</button>
+      </div>
+    </div>
+    <!-- Add Friend Modal -->
+    <div id="add-friend-modal" style="display:none;position:fixed;z-index:80;top:0;left:0;width:100vw;height:100vh;background:rgba(234,234,234,0.97);align-items:center;justify-content:center;">
+      <div class="neumorph-card p-8 flex flex-col gap-4 items-center" style="min-width:320px;max-width:90vw;">
+        <div class="flix-title text-xl font-bold text-gray-700 mb-2">Add Friend</div>
+        <input id="add-friend-input" type="text" class="neumorph-input w-full text-lg" placeholder="Enter friend's name or email" style="max-width:260px;" />
+        <div id="add-friend-error" class="text-red-600 text-sm mt-1" style="display:none;"></div>
+        <button id="confirm-add-friend-btn" class="neumorph-btn px-4 py-2 text-base">Add</button>
+        <button id="cancel-add-friend-btn" class="neumorph-btn px-4 py-2 text-base">Cancel</button>
+      </div>
+    </div>
+    <!-- Floating Account Button (bottom right) and 3-dot menu -->
+    <div style="position:fixed;z-index:41;bottom:32px;right:32px;display:flex;flex-direction:row;gap:8px;align-items:center;">
+      <button id="custom-menu-btn" title="More options" class="neumorph-btn flex items-center justify-center w-10 h-10 text-xl rounded-full" style="padding:0;min-width:40px;box-shadow: -4px -4px 8px #fff, 4px 4px 8px #d1d9e6;">&#8942;</button>
+      <button id="account-btn" class="neumorph-btn px-4 py-2 text-base flex items-center gap-2" style="min-width:110px;box-shadow: -4px -4px 8px #fff, 4px 4px 8px #d1d9e6;">
+        <span id="account-avatar" style="width:32px;height:32px;display:inline-block;border-radius:50%;background:#ccc;overflow:hidden;margin-right:8px;"></span>
+        <span id="account-username">Account</span>
+      </button>
+    </div>
+
+    <!-- Custom 3-dot menu popup -->
+    <div id="custom-menu-popup" style="display:none;position:fixed;z-index:60;bottom:80px;right:40px;background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,0.13);padding:18px 22px;min-width:180px;">
+      <div class="mb-3 flex items-center justify-between">
+        <span class="text-gray-700 text-sm">Currency</span>
+        <select id="currency-select" class="neumorph-input text-sm py-1 px-2" style="width:70px;">
+          <option value="$">$</option>
+          <option value="៛">៛</option>
+        </select>
+      </div>
+      <div class="mb-2 flex items-center justify-between">
+        <span class="text-gray-700 text-sm">Language</span>
+        <select id="lang-select" class="neumorph-input text-sm py-1 px-2" style="width:90px;">
+          <option value="en">English</option>
+          <option value="km">Khmer</option>
+        </select>
+      </div>
+      <div id="rate-info" class="text-xs text-gray-500 mt-2" style="display:none;">1$ = 4000៛</div>
+    </div>
+    <!-- Account Modal -->
+    <div id="account-modal" style="display:none;position:fixed;z-index:60;top:0;left:0;width:100vw;height:100vh;background:rgba(234,234,234,0.98);align-items:center;justify-content:center;">
+      <div class="neumorph-card p-8 flex flex-col gap-6 items-center" style="min-width:320px;max-width:90vw;">
+        <div class="flix-title text-2xl font-extrabold text-gray-700 mb-2">Account Settings</div>
+        <div class="w-full flex flex-col gap-3" style="max-width:260px;">
+          <div class="flex flex-col items-center mb-2">
+            <label for="account-edit-avatar" style="cursor:pointer;">
+              <span id="account-modal-avatar" style="width:64px;height:64px;display:inline-block;border-radius:50%;background:#ccc;overflow:hidden;"></span>
+              <input id="account-edit-avatar" type="file" accept="image/*" style="display:none;" />
+            </label>
+            <span class="text-xs text-gray-500 mt-1">Click avatar to change</span>
+          </div>
+          <label class="text-gray-600 text-sm">Username
+            <input id="account-edit-username" type="text" class="neumorph-input w-full text-lg mt-1" />
+          </label>
+          <label class="text-gray-600 text-sm">Email
+            <input id="account-edit-email" type="email" class="neumorph-input w-full text-lg mt-1" disabled />
+          </label>
+          <label class="text-gray-600 text-sm">New Password
+            <input id="account-edit-password" type="password" class="neumorph-input w-full text-lg mt-1" placeholder="Leave blank to keep current" />
+          </label>
+          <div class="flex items-center gap-2 mt-2">
+            <input id="account-darkmode" type="checkbox" class="form-checkbox h-4 w-4" />
+            <label for="account-darkmode" class="text-gray-600 text-sm">Dark Mode</label>
+          </div>
+        </div>
+        <div id="account-error" class="text-red-600 text-sm mt-1" style="display:none;"></div>
+        <div class="flex flex-wrap gap-4 mt-2 justify-center">
+          <button id="account-save-btn" class="neumorph-btn px-6 py-2 text-base">Save</button>
+          <button id="account-logout-btn" class="neumorph-btn px-6 py-2 text-base">Log Out</button>
+          <button id="account-delete-btn" class="neumorph-btn px-6 py-2 text-base" style="color:#e74c3c;">Delete Account</button>
+          <button id="account-close-btn" class="neumorph-btn px-6 py-2 text-base">Close</button>
+        </div>
+      </div>
+    </div>
+  <div class="max-w-3xl mx-auto py-8 px-2">
+    <!-- Header -->
+    <h1 id="header-title" class="flix-title text-3xl font-extrabold mb-20 text-center text-gray-600 select-none">PieBet Card Tracker</h1>
+    <div id="round-count" class="text-lg font-semibold mb-0.1 text-center text-gray-700 select-none neumorph-card" style="max-width: 220px; margin-left:auto; margin-right:auto; border-radius: 9999px; box-shadow: -9px -9px 16px #fff, 9px 9px 16px #d1d9e6; padding-top: 0.7rem; padding-bottom: 0.7rem;">Round 1</div>
+    <!-- Player Grid -->
+    <div class="flex items-center justify-between mb-2">
+      <span class="text-gray-500 text-sm ml-2">Player</span>
+      <button id="add-player-btn"
+        title="Add Player"
+        class="neumorph-btn flex items-center justify-center w-7 h-7 text-lg rounded-full"
+        style="box-shadow: -4px -4px 8px #fff, 4px 4px 8px #d1d9e6;">
+        <span class="pointer-events-none select-none flex items-center justify-center w-full h-full">+</span>
+      </button>
+    </div>
+    <div class="relative mb-8">
+      <div id="player-grid" class="player-grid grid grid-cols-1 sm:grid-cols-2 gap-6 mt-2">
+        <!-- Player cards will be injected here -->
+      </div>
+    </div>
+    <!-- Next Round, Clear Round, Start New Game Buttons -->
+    <div class="flex flex-col sm:flex-row justify-center items-center gap-3 mb-10">
+      <button id="next-round-btn" class="neumorph-btn px-8 py-3 text-lg" style="border: 2px solid #e0e0e0; box-shadow: -4px -4px 8px #fff, 4px 4px 8px #d1d9e6;">Next Round</button>
+      <button id="new-game-btn" class="neumorph-btn px-6 py-3 text-base" style="color:#e74c3c; border: 2px solid #e0e0e0; box-shadow: -4px -4px 8px #fff, 4px 4px 8px #d1d9e6;">Start New Game</button>
+    </div>
+    <!-- History Section -->
+    <div>
+      <h2 class="text-xl font-semibold mb-4 text-gray-600 select-none">History</h2>
+      <div id="history-list" class="space-y-4">
+        <!-- History rounds will be injected here -->
+      </div>
+    </div>
+  </div>
+  </div>
+  <script>
+    // --- Friend List State ---
+    let friends = JSON.parse(localStorage.getItem('friends') || '[]');
+    let pendingRequests = JSON.parse(localStorage.getItem('pendingRequests') || '[]');
+
+    function saveFriends() {
+      localStorage.setItem('friends', JSON.stringify(friends));
+      localStorage.setItem('pendingRequests', JSON.stringify(pendingRequests));
+    }
+
+    function renderFriendList() {
+      const friendList = document.getElementById('friend-list');
+      friendList.innerHTML = '';
+      if (friends.length === 0) {
+        friendList.innerHTML = '<li class="text-gray-500 text-center">No friends yet.</li>';
+      } else {
+        friends.forEach((f, idx) => {
+          const li = document.createElement('li');
+          li.className = 'flex items-center justify-between px-3 py-2 mb-1 bg-white rounded shadow-sm';
+          li.innerHTML = `<span>${f}</span><button data-idx="${idx}" class="remove-friend-btn text-red-500 text-sm ml-2">Remove</button>`;
+          friendList.appendChild(li);
+        });
+        // Remove friend listeners
+        friendList.querySelectorAll('.remove-friend-btn').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            const idx = +e.target.dataset.idx;
+            friends.splice(idx, 1);
+            saveFriends();
+            renderFriendList();
+            renderPendingList();
+          });
+        });
+      }
+
+      // Pending requests
+      renderPendingList();
+    }
+
+    function renderPendingList() {
+      const pendingList = document.getElementById('pending-list');
+      pendingList.innerHTML = '';
+      if (pendingRequests.length === 0) {
+        pendingList.innerHTML = '<li class="text-gray-400 text-center">No pending requests.</li>';
+        return;
+      }
+      pendingRequests.forEach((f, idx) => {
+        const li = document.createElement('li');
+        li.className = 'flex items-center justify-between px-3 py-2 mb-1 bg-yellow-50 rounded shadow-sm';
+        li.innerHTML = `
+          <span style="display:flex;align-items:center;gap:16px;width:100%;min-width:0;">
+            <span style="flex:1 1 auto;min-width:0;display:block;padding:4px 18px;font-size:1rem;border:1.5px solid #e0e0e0;border-radius:8px;background:#fff;color:#444;font-weight:500;text-align:left;">${f}</span>
+            <span style="flex-shrink:0;display:flex;gap:6px;">
+              <button data-idx="${idx}" title="Accept" class="confirm-friend-btn neumorph-btn" style="width:32px;height:32px;min-width:32px;min-height:32px;padding:0;display:flex;align-items:center;justify-content:center;background:#EAEAEA;border-radius:12px;border:2px solid #e0e0e0;box-shadow:-9px -9px 16px #fff,9px 9px 16px #d1d9e6;color:#22c55e;font-size:1.2rem;">✓</button>
+              <button data-idx="${idx}" title="Decline" class="decline-friend-btn neumorph-btn" style="width:32px;height:32px;min-width:32px;min-height:32px;padding:0;display:flex;align-items:center;justify-content:center;background:#EAEAEA;border-radius:12px;border:2px solid #e0e0e0;box-shadow:-9px -9px 16px #fff,9px 9px 16px #d1d9e6;color:#ef4444;font-size:1.2rem;">✗</button>
+            </span>
+          </span>
+        `;
+        pendingList.appendChild(li);
+      });
+      // Confirm/Decline listeners
+      pendingList.querySelectorAll('.confirm-friend-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const idx = +e.target.dataset.idx;
+          const user = firebase.auth().currentUser;
+          if (!user) return;
+          const senderEmail = pendingRequests[idx];
+          // Remove from pendingRequests and add to friends in Firestore
+          try {
+            // Update your own doc
+            await db.collection('users').doc(user.uid).update({
+              pendingRequests: firebase.firestore.FieldValue.arrayRemove(senderEmail),
+              friends: firebase.firestore.FieldValue.arrayUnion(senderEmail)
+            });
+            // Add you to sender's friends
+            const usersRef = db.collection('users');
+            const q = await usersRef.where('email', '==', senderEmail).get();
+            if (!q.empty) {
+              const senderDoc = q.docs[0];
+              await usersRef.doc(senderDoc.id).update({
+                friends: firebase.firestore.FieldValue.arrayUnion(user.email)
+              });
+            }
+          } catch (err) {
+            alert('Error confirming friend: ' + (err.message || err));
+          }
+        });
+      });
+      pendingList.querySelectorAll('.decline-friend-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const idx = +e.target.dataset.idx;
+          const user = firebase.auth().currentUser;
+          if (!user) return;
+          const senderEmail = pendingRequests[idx];
+          // Remove from pendingRequests in Firestore
+          try {
+            await db.collection('users').doc(user.uid).update({
+              pendingRequests: firebase.firestore.FieldValue.arrayRemove(senderEmail)
+            });
+          } catch (err) {
+            alert('Error declining friend: ' + (err.message || err));
+          }
+        });
+      });
+    }
+
+    // --- Friend List Modal Logic ---
+    const friendListBtn = document.getElementById('friend-list-btn');
+    const friendListModal = document.getElementById('friend-list-modal');
+    const addFriendBtn = document.getElementById('add-friend-btn');
+    const closeFriendListBtn = document.getElementById('close-friend-list-btn');
+    const addFriendModal = document.getElementById('add-friend-modal');
+    const addFriendInput = document.getElementById('add-friend-input');
+    const addFriendError = document.getElementById('add-friend-error');
+    const confirmAddFriendBtn = document.getElementById('confirm-add-friend-btn');
+    const cancelAddFriendBtn = document.getElementById('cancel-add-friend-btn');
+
+    friendListBtn.addEventListener('click', () => {
+      renderFriendList();
+      friendListModal.style.display = 'flex';
+    });
+    closeFriendListBtn.addEventListener('click', () => {
+      friendListModal.style.display = 'none';
+    });
+    addFriendBtn.addEventListener('click', () => {
+      addFriendInput.value = '';
+      addFriendError.style.display = 'none';
+      addFriendModal.style.display = 'flex';
+      setTimeout(() => addFriendInput.focus(), 100);
+    });
+    cancelAddFriendBtn.addEventListener('click', () => {
+      addFriendModal.style.display = 'none';
+    });
+    confirmAddFriendBtn.addEventListener('click', () => {
+      const val = addFriendInput.value.trim();
+      if (!val) {
+        addFriendError.textContent = 'Please enter a name or email.';
+        addFriendError.style.display = '';
+        return;
+      }
+      const user = firebase.auth().currentUser;
+      if (!user) return;
+      if (user.email === val) {
+        addFriendError.textContent = 'You cannot add yourself.';
+        addFriendError.style.display = '';
+        return;
+      }
+      // Check if already a friend or already pending
+      db.collection('users').doc(user.uid).get().then(doc => {
+        const data = doc.data();
+        if (data && data.friends && data.friends.includes(val)) {
+          addFriendError.textContent = 'Already in your friend list.';
+          addFriendError.style.display = '';
+          return;
+        }
+        if (data && data.pendingRequests && data.pendingRequests.includes(val)) {
+          addFriendError.textContent = 'Already in pending requests.';
+          addFriendError.style.display = '';
+          return;
+        }
+        // Find user by email
+        db.collection('users').where('email', '==', val).get().then(q => {
+          if (q.empty) {
+            addFriendError.textContent = 'No user found with that email.';
+            addFriendError.style.display = '';
+            return;
+          }
+          const otherUserDoc = q.docs[0];
+          // Add your email to their pendingRequests
+          db.collection('users').doc(otherUserDoc.id).update({
+            pendingRequests: firebase.firestore.FieldValue.arrayUnion(user.email)
+          }).then(() => {
+            addFriendModal.style.display = 'none';
+            friendListModal.style.display = 'flex';
+            alert('Friend request sent!');
+          }).catch(err => {
+            addFriendError.textContent = 'Error sending request: ' + (err.message || err);
+            addFriendError.style.display = '';
+          });
+        });
+      });
+    });
+    addFriendInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmAddFriendBtn.click(); });
+    // --- Custom Menu State ---
+    let currency = '$';
+    let lang = 'en';
+    // --- Firebase Initialization ---
+    // Your web app's Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyDF27rWR0nSF-4kmOVZaznYezV-wKbDVV4",
+      authDomain: "pieecardbase.firebaseapp.com",
+      projectId: "pieecardbase",
+      storageBucket: "pieecardbase.firebasestorage.app",
+      messagingSenderId: "449979302495",
+      appId: "1:449979302495:web:d429a49490d19ab9b351ea",
+      measurementId: "G-NE1FTRM3XS"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+
+    // Google Login (Real)
+    const googleLoginBtn = document.getElementById('google-login-btn');
+    if (googleLoginBtn) {
+      googleLoginBtn.addEventListener('click', () => {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        auth.signInWithPopup(provider)
+          .then((result) => {
+            const user = result.user;
+            // Optionally, store user info in your DB here
+            completeSignup(user.displayName || user.email);
+          })
+          .catch((error) => {
+            alert('Google login failed: ' + error.message);
+          });
+      });
+    }
+    // --- Account Menu/Modal Logic ---
+    // --- Custom 3-dot menu logic ---
+    const customMenuBtn = document.getElementById('custom-menu-btn');
+    const customMenuPopup = document.getElementById('custom-menu-popup');
+    const currencySelect = document.getElementById('currency-select');
+    const langSelect = document.getElementById('lang-select');
+    const rateInfo = document.getElementById('rate-info');
+    customMenuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      customMenuPopup.style.display = customMenuPopup.style.display === 'none' ? 'block' : 'none';
+    });
+    document.addEventListener('click', (e) => {
+      if (customMenuPopup.style.display === 'block' && !customMenuPopup.contains(e.target) && e.target !== customMenuBtn) {
+        customMenuPopup.style.display = 'none';
+      }
+    });
+    currencySelect.addEventListener('change', (e) => {
+      currency = e.target.value;
+      rateInfo.style.display = currency === '៛' ? '' : 'none';
+      renderPlayers();
+      renderHistory();
+    });
+    langSelect.addEventListener('change', (e) => {
+      lang = e.target.value;
+      renderHeader();
+      renderPlayers();
+      renderHistory();
+    });
+    const accountBtn = document.getElementById('account-btn');
+    const accountModal = document.getElementById('account-modal');
+    const accountUsername = document.getElementById('account-username');
+    const accountAvatar = document.getElementById('account-avatar');
+    const accountModalAvatar = document.getElementById('account-modal-avatar');
+    const accountEditAvatar = document.getElementById('account-edit-avatar');
+    const accountEditUsername = document.getElementById('account-edit-username');
+    const accountEditEmail = document.getElementById('account-edit-email');
+    const accountEditPassword = document.getElementById('account-edit-password');
+    const accountDarkmode = document.getElementById('account-darkmode');
+    const accountSaveBtn = document.getElementById('account-save-btn');
+    const accountLogoutBtn = document.getElementById('account-logout-btn');
+    const accountDeleteBtn = document.getElementById('account-delete-btn');
+    const accountCloseBtn = document.getElementById('account-close-btn');
+    const accountError = document.getElementById('account-error');
+
+    function showAccountError(msg) {
+      accountError.textContent = msg;
+      accountError.style.display = '';
+    }
+    function hideAccountError() {
+      accountError.textContent = '';
+      accountError.style.display = 'none';
+    }
+
+    function getCurrentUserObj() {
+      // Return the current Firebase user
+      return firebase.auth().currentUser;
+    }
+
+    function updateAccountMenu() {
+      const user = getCurrentUserObj();
+      accountUsername.textContent = user && user.displayName ? user.displayName : (user && user.email ? user.email : 'Account');
+      // Avatar (custom avatar not supported in Firebase Auth by default)
+      accountAvatar.style.background = '#ccc';
+      accountAvatar.innerHTML = '';
+    }
+
+    accountBtn.addEventListener('click', () => {
+      // Fill modal with current user info
+      const user = getCurrentUserObj();
+      if (!user) return;
+      accountEditUsername.value = user.displayName || '';
+      accountEditEmail.value = user.email || '';
+      accountEditPassword.value = '';
+      // Avatar (not supported)
+      accountModalAvatar.style.background = '#ccc';
+      accountModalAvatar.innerHTML = '';
+      // Dark mode
+      accountDarkmode.checked = document.body.classList.contains('dark');
+      hideAccountError();
+      accountModal.style.display = 'flex';
+      setTimeout(() => accountEditUsername.focus(), 100);
+    });
+    accountCloseBtn.addEventListener('click', () => {
+      accountModal.style.display = 'none';
+    });
+    accountLogoutBtn.addEventListener('click', () => {
+      // Log out: show auth modal, hide main app
+      accountModal.style.display = 'none';
+      mainApp.style.display = 'none';
+      authModal.style.display = '';
+      signinForm.style.display = '';
+      signupForm.style.display = 'none';
+      forgotForm.style.display = 'none';
+      signinEmail.value = '';
+      signinPassword.value = '';
+      signinError.style.display = 'none';
+      currentUser = null;
+      setTimeout(() => signinEmail.focus(), 100);
+    });
+    accountSaveBtn.addEventListener('click', () => {
+      const user = getCurrentUserObj();
+      if (!user) return;
+      const newUsername = accountEditUsername.value.trim();
+      const newPassword = accountEditPassword.value;
+      if (!newUsername) {
+        showAccountError('Username cannot be empty.');
+        return;
+      }
+      // Update displayName
+      user.updateProfile({ displayName: newUsername })
+        .then(() => {
+          if (newPassword) {
+            if (newPassword.length < 6) {
+              showAccountError('Password must be at least 6 characters.');
+              return Promise.reject();
+            }
+            return user.updatePassword(newPassword);
+          }
+        })
+        .then(() => {
+          updateAccountMenu();
+          hideAccountError();
+          accountModal.style.display = 'none';
+          alert('Account updated!');
+        })
+        .catch((error) => {
+          if (error && error.message) showAccountError(error.message);
+        });
+    });
+    // Avatar upload
+    accountEditAvatar.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const user = getCurrentUserObj();
+        if (user) {
+          user.avatar = evt.target.result;
+          updateAccountMenu();
+        }
+        // Show in modal
+        accountModalAvatar.style.background = 'none';
+        accountModalAvatar.innerHTML = `<img src="${evt.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />`;
+      };
+      reader.readAsDataURL(file);
+    });
+    // Dark mode toggle
+    accountDarkmode.addEventListener('change', (e) => {
+      if (e.target.checked) {
+        document.body.classList.add('dark');
+        document.body.style.background = '#23272f';
+      } else {
+        document.body.classList.remove('dark');
+        document.body.style.background = '#EAEAEA';
+      }
+    });
+    // Delete account
+    accountDeleteBtn.addEventListener('click', () => {
+      if (!confirm('Are you sure you want to delete your account? This cannot be undone.')) return;
+      const user = getCurrentUserObj();
+      if (!user) return;
+      user.delete().then(() => {
+        accountModal.style.display = 'none';
+        mainApp.style.display = 'none';
+        authModal.style.display = '';
+        signinForm.style.display = '';
+        signupForm.style.display = 'none';
+        forgotForm.style.display = 'none';
+        signinEmail.value = '';
+        signinPassword.value = '';
+        signinError.style.display = 'none';
+        currentUser = null;
+        setTimeout(() => signinEmail.focus(), 100);
+        alert('Account deleted.');
+      }).catch((error) => {
+        alert('Error deleting account: ' + error.message);
+      });
+    });
+
+    // Update menu on login
+    function onLogin(username) {
+      currentUser = username;
+      updateAccountMenu();
+    }
+    // Forgot Password (Firebase)
+    const forgotForm = document.getElementById('forgot-form');
+    const showForgot = document.getElementById('show-forgot');
+    const forgotEmail = document.getElementById('forgot-email');
+    const forgotSendBtn = document.getElementById('forgot-send-btn');
+    const forgotError = document.getElementById('forgot-error');
+    const showSignin2 = document.getElementById('show-signin2');
+    function showForgotError(msg) {
+      forgotError.textContent = msg;
+      forgotError.style.display = '';
+    }
+    function hideForgotError() {
+      forgotError.textContent = '';
+      forgotError.style.display = 'none';
+    }
+    // Show forgot password form
+    showForgot.addEventListener('click', (e) => {
+      e.preventDefault();
+      signinForm.style.display = 'none';
+      signupForm.style.display = 'none';
+      forgotForm.style.display = '';
+      forgotEmail.disabled = false;
+      forgotEmail.value = '';
+      forgotSendBtn.disabled = false;
+      hideForgotError();
+      forgotEmail.focus();
+    });
+    showSignin2.addEventListener('click', (e) => {
+      e.preventDefault();
+      forgotForm.style.display = 'none';
+      signupForm.style.display = 'none';
+      signinForm.style.display = '';
+      signinEmail.focus();
+    });
+    // Send reset email
+    forgotSendBtn.addEventListener('click', () => {
+      const email = forgotEmail.value.trim();
+      if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+        showForgotError('Please enter a valid email address.');
+        return;
+      }
+      hideForgotError();
+      forgotSendBtn.disabled = true;
+      firebase.auth().sendPasswordResetEmail(email)
+        .then(() => {
+          alert('Password reset email sent to ' + email + '. Please check your inbox.');
+          forgotForm.style.display = 'none';
+          signinForm.style.display = '';
+          signinEmail.focus();
+        })
+        .catch((error) => {
+          showForgotError(error.message);
+        })
+        .finally(() => {
+          forgotSendBtn.disabled = false;
+        });
+    });
+    forgotEmail.addEventListener('keydown', (e) => { if (e.key === 'Enter') forgotSendBtn.click(); });
+    // --- Signup & Sign In Logic (Firebase) ---
+    const authModal = document.getElementById('auth-modal');
+    const mainApp = document.getElementById('main-app');
+    // Sign Up
+    const signupForm = document.getElementById('signup-form');
+    const signupBtn = document.getElementById('signup-btn');
+    const signupInput = document.getElementById('signup-username');
+    const signupEmail = document.getElementById('signup-email');
+    const signupPassword = document.getElementById('signup-password');
+    const signupError = document.getElementById('signup-error');
+    const showSignin = document.getElementById('show-signin');
+    // Sign In
+    const signinForm = document.getElementById('signin-form');
+    const signinBtn = document.getElementById('signin-btn');
+    const signinEmail = document.getElementById('signin-email');
+    const signinPassword = document.getElementById('signin-password');
+    const signinError = document.getElementById('signin-error');
+    const showSignup = document.getElementById('show-signup');
+    let currentUser = null;
+
+    function showSignupError(msg) {
+      signupError.textContent = msg;
+      signupError.style.display = '';
+    }
+    function hideSignupError() {
+      signupError.textContent = '';
+      signupError.style.display = 'none';
+    }
+    function completeSignup(username) {
+      onLogin(username);
+      authModal.style.display = 'none';
+      mainApp.style.display = '';
+    }
+
+    // Sign Up with Firebase
+    signupBtn.addEventListener('click', () => {
+      const username = signupInput.value.trim();
+      const email = signupEmail.value.trim();
+      const password = signupPassword.value;
+      if (!username) {
+        showSignupError('Please enter a username.');
+        return;
+      }
+      if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+        showSignupError('Please enter a valid email address.');
+        return;
+      }
+      if (!password || password.length < 6) {
+        showSignupError('Password must be at least 6 characters.');
+        return;
+      }
+      hideSignupError();
+      signupBtn.disabled = true;
+      firebase.auth().createUserWithEmailAndPassword(email, password)
+        .then((userCredential) => {
+          // Set displayName
+          return userCredential.user.updateProfile({ displayName: username }).then(() => userCredential.user);
+        })
+        .then((user) => {
+          // Optionally send email verification
+          if (user.emailVerified === false) {
+            user.sendEmailVerification();
+          }
+          completeSignup(user.displayName || user.email);
+        })
+        .catch((error) => {
+          if (error.code === 'auth/email-already-in-use') {
+            showSignupError('Email already registered. Please sign in.');
+          } else {
+            showSignupError(error.message);
+          }
+        })
+        .finally(() => {
+          signupBtn.disabled = false;
+        });
+    });
+    signupInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') signupBtn.click(); });
+    signupEmail.addEventListener('keydown', (e) => { if (e.key === 'Enter') signupBtn.click(); });
+    signupPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') signupBtn.click(); });
+
+    // Sign In with Firebase
+    signinBtn.addEventListener('click', () => {
+      const email = signinEmail.value.trim();
+      const password = signinPassword.value;
+      if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+        signinError.textContent = 'Please enter a valid email address.';
+        signinError.style.display = '';
+        return;
+      }
+      if (!password) {
+        signinError.textContent = 'Please enter your password.';
+        signinError.style.display = '';
+        return;
+      }
+      signinError.style.display = 'none';
+      firebase.auth().signInWithEmailAndPassword(email, password)
+        .then((userCredential) => {
+          const user = userCredential.user;
+          completeSignup(user.displayName || user.email);
+        })
+        .catch((error) => {
+          if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+            signinError.textContent = 'Incorrect email or password.';
+          } else {
+            signinError.textContent = error.message;
+          }
+          signinError.style.display = '';
+        });
+    });
+    signinEmail.addEventListener('keydown', (e) => { if (e.key === 'Enter') signinBtn.click(); });
+    signinPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') signinBtn.click(); });
+
+    // Switch between sign in and sign up
+    showSignin.addEventListener('click', (e) => {
+      e.preventDefault();
+      signupForm.style.display = 'none';
+      signinForm.style.display = '';
+      signinEmail.focus();
+    });
+    showSignup.addEventListener('click', (e) => {
+      e.preventDefault();
+      signinForm.style.display = 'none';
+      signupForm.style.display = '';
+      signupInput.focus();
+    });
+
+    // Optionally, focus input on load
+    window.addEventListener('DOMContentLoaded', () => {
+      signinForm.style.display = '';
+      signupForm.style.display = 'none';
+      signinEmail.focus();
+    });
+    // --- Data Structures ---
+    const defaultPlayers = [
+      { name: "NUK", won: 0, lost: 0 },
+      { name: "TOU", won: 0, lost: 0 },
+      { name: "DETH", won: 0, lost: 0 },
+      { name: "YING", won: 0, lost: 0 }
+    ];
+    let players = defaultPlayers.map(p => ({ ...p }));
+    let round = 1;
+    let history = [];
+    // Store current round bets per player index
+    let currentBets = [];
+
+    // --- DOM Elements ---
+    const playerGrid = document.getElementById('player-grid');
+    const nextRoundBtn = document.getElementById('next-round-btn');
+    const historyList = document.getElementById('history-list');
+    const headerTitle = document.getElementById('header-title');
+
+    // --- Render Functions ---
+    function renderPlayers() {
+      playerGrid.innerHTML = '';
+      players.forEach((player, idx) => {
+        // Calculate total for this player from all rounds
+        let total = 0;
+        history.forEach(roundData => {
+          const p = roundData[idx];
+          if (p) {
+            total += p.bet;
+          }
+        });
+
+        // Currency symbol
+        let cur = currency;
+        // Language for placeholder
+        let betPlaceholder = lang === 'km' ? 'បញ្ចូលចំនួន' : 'Enter bet';
+
+        const card = document.createElement('div');
+        card.className = "neumorph-card p-6 flex flex-col gap-4";
+        card.innerHTML = `
+          <div class="flex items-center gap-2">
+            <input type="text" value="${player.name}" data-idx="${idx}" class="player-name-input neumorph-input font-semibold text-lg flex-1" />
+            <button title="Remove Player" data-idx="${idx}"
+              class="remove-player-btn flex items-center justify-center w-7 h-7 text-lg rounded-full bg-transparent border-none shadow-none font-bold"
+              style="color:#e74c3c;padding:0; margin-left:12px;">
+              <span class="pointer-events-none select-none flex items-center justify-center w-full h-full">&minus;</span>
+            </button>
+          </div>
+          <input type="number" placeholder="${betPlaceholder}" data-idx="${idx}" class="player-bet-input neumorph-input w-full" value="${typeof currentBets[idx] !== 'undefined' ? currentBets[idx] : ''}" />
+          <div class="flex gap-2 mt-2">
+            <div class="flex-1 neumorph-stats ${total >= 0 ? 'text-green-700' : 'text-red-700'}">Total: <span class="player-total">${cur}${total >= 0 ? '+' + total : total}</span></div>
+          </div>
+        `;
+        playerGrid.appendChild(card);
+      });
+
+      // Attach name input listeners
+      playerGrid.querySelectorAll('.player-name-input').forEach(input => {
+        input.addEventListener('input', (e) => {
+          const idx = +e.target.dataset.idx;
+          players[idx].name = e.target.value;
+        });
+      });
+
+      // Attach bet input listeners (persist value per player)
+      playerGrid.querySelectorAll('.player-bet-input').forEach(input => {
+        input.addEventListener('input', (e) => {
+          const idx = +e.target.dataset.idx;
+          currentBets[idx] = e.target.value;
+        });
+      });
+
+      // Attach remove player listeners
+      playerGrid.querySelectorAll('.remove-player-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const idx = +e.target.dataset.idx;
+          if (players.length > 1) {
+            players.splice(idx, 1);
+            currentBets.splice(idx, 1);
+            renderPlayers();
+            updateStatsUI();
+          }
+        });
+      });
+    }
+
+    function renderHeader() {
+      headerTitle.textContent = lang === 'km' ? 'កម្មវិធីកត់ត្រាការភ្នាល់បៀ' : 'PieBet Card Tracker';
+      const roundCount = document.getElementById('round-count');
+      if (roundCount) {
+        roundCount.textContent = (lang === 'km' ? 'ជុំទី ' : 'Round ') + round;
+      }
+    }
+
+    function renderHistory() {
+      historyList.innerHTML = '';
+      if (history.length === 0) return;
+      // Create table
+      const tableWrapper = document.createElement('div');
+      tableWrapper.className = 'px-4';
+      const table = document.createElement('table');
+      table.className = 'min-w-full neumorph-history p-0';
+      // Table header
+      const thead = document.createElement('thead');
+      const headerRow = document.createElement('tr');
+      headerRow.innerHTML = `<th class="px-2 py-1 text-left text-gray-600">${lang === 'km' ? 'ជុំ' : 'Round'}</th>` +
+        players.map(p => `<th class="px-2 py-1 text-center text-gray-700">${p.name}</th>`).join('');
+      thead.appendChild(headerRow);
+      table.appendChild(thead);
+      // Table body
+      const tbody = document.createElement('tbody');
+      history.forEach((roundData, i) => {
+        const row = document.createElement('tr');
+        row.className = 'border-b border-gray-300';
+        row.innerHTML = `<td class="px-2 py-1 font-semibold text-gray-600">${i + 1}</td>` +
+          roundData.map(p => `<td class="px-2 py-1 text-center ${p.bet < 0 ? 'text-green-700' : (p.bet > 0 ? 'text-red-700' : 'text-gray-500')}">${currency}${p.bet}</td>`).join('');
+        tbody.appendChild(row);
+      });
+      table.appendChild(tbody);
+      tableWrapper.appendChild(table);
+      historyList.appendChild(tableWrapper);
+    }
+
+    function clearBetInputs() {
+      playerGrid.querySelectorAll('.player-bet-input').forEach(input => input.value = '');
+    }
+
+    function updateStatsUI() {
+      playerGrid.querySelectorAll('.player-total').forEach((el, idx) => {
+        // Recalculate total for each player
+        let total = 0;
+        history.forEach(roundData => {
+          const p = roundData[idx];
+          if (p) {
+            total += p.bet;
+          }
+        });
+        el.textContent = total >= 0 ? '+' + total : total;
+        el.parentElement.className = `flex-1 neumorph-stats ${total >= 0 ? 'text-green-700' : 'text-red-700'}`;
+      });
+    }
+
+    // --- Event Handlers ---
+    nextRoundBtn.addEventListener('click', () => {
+      // Collect bets from currentBets
+      const bets = [];
+      playerGrid.querySelectorAll('.player-bet-input').forEach((input, idx) => {
+        const val = input.value.trim();
+        bets[idx] = val === '' ? 0 : Number(val) || 0;
+      });
+      // Update player stats and history
+      const roundData = players.map((p, idx) => {
+        const bet = bets[idx];
+        if (bet < 0) p.won += Math.abs(bet);
+        if (bet > 0) p.lost += bet;
+        return { name: p.name, bet };
+      });
+      history.push(roundData);
+      round++;
+      // Clear currentBets for next round
+      currentBets = [];
+      renderHeader();
+      updateStatsUI();
+      renderHistory();
+      clearBetInputs();
+    });
+
+
+
+    // Start New Game button logic: resets all state
+    document.getElementById('new-game-btn').addEventListener('click', () => {
+      if (!confirm('Are you sure you want to start a new game? This will clear all rounds and reset players.')) return;
+      players = [
+        { name: "NUK", won: 0, lost: 0 },
+        { name: "TOU", won: 0, lost: 0 },
+        { name: "DETH", won: 0, lost: 0 },
+        { name: "YING", won: 0, lost: 0 }
+      ];
+      round = 1;
+      history = [];
+      currentBets = [];
+      renderHeader();
+      renderPlayers();
+      renderHistory();
+      updateStatsUI();
+      clearBetInputs();
+    });
+
+    document.getElementById('add-player-btn').addEventListener('click', () => {
+      players.push({ name: `Player ${players.length + 1}`, won: 0, lost: 0 });
+      renderPlayers();
+      updateStatsUI();
+    });
+
+    // --- Initial Render ---
+    renderHeader();
+    renderPlayers();
+    renderHistory();
+    updateAccountMenu();
+  </script>
+</body>
+</html>
