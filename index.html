@@ -12,6 +12,8 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <!-- Firebase Auth -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <!-- Firestore compat -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <style>
     /* FLIX - Unique Display font for the title */
     .flix-title {
@@ -339,13 +341,25 @@
   </div>
   </div>
   <script>
-    // --- Friend List State ---
-    let friends = JSON.parse(localStorage.getItem('friends') || '[]');
-    let pendingRequests = JSON.parse(localStorage.getItem('pendingRequests') || '[]');
+    // --- Firestore Friend List State ---
+    const db = firebase.firestore();
+    let friends = [];
+    let pendingRequests = [];
+    let userDocUnsub = null;
 
-    function saveFriends() {
-      localStorage.setItem('friends', JSON.stringify(friends));
-      localStorage.setItem('pendingRequests', JSON.stringify(pendingRequests));
+    function getUserDocRef(uid) {
+      return db.collection('users').doc(uid);
+    }
+    function listenToUserDoc() {
+      const user = getCurrentUserObj();
+      if (!user) return;
+      if (userDocUnsub) userDocUnsub();
+      userDocUnsub = getUserDocRef(user.uid).onSnapshot(doc => {
+        const data = doc.data() || {};
+        friends = data.friends || [];
+        pendingRequests = data.pendingRequests || [];
+        // renderFriendList(); (UI logic will be added in next step)
+      });
     }
 
     function renderFriendList() {
@@ -386,59 +400,25 @@
       pendingRequests.forEach((f, idx) => {
         const li = document.createElement('li');
         li.className = 'flex items-center justify-between px-3 py-2 mb-1 bg-yellow-50 rounded shadow-sm';
-        li.innerHTML = `
-          <span style="display:flex;align-items:center;gap:16px;width:100%;min-width:0;">
-            <span style="flex:1 1 auto;min-width:0;display:block;padding:4px 18px;font-size:1rem;border:1.5px solid #e0e0e0;border-radius:8px;background:#fff;color:#444;font-weight:500;text-align:left;">${f}</span>
-            <span style="flex-shrink:0;display:flex;gap:6px;">
-              <button data-idx="${idx}" title="Accept" class="confirm-friend-btn neumorph-btn" style="width:32px;height:32px;min-width:32px;min-height:32px;padding:0;display:flex;align-items:center;justify-content:center;background:#EAEAEA;border-radius:12px;border:2px solid #e0e0e0;box-shadow:-9px -9px 16px #fff,9px 9px 16px #d1d9e6;color:#22c55e;font-size:1.2rem;">✓</button>
-              <button data-idx="${idx}" title="Decline" class="decline-friend-btn neumorph-btn" style="width:32px;height:32px;min-width:32px;min-height:32px;padding:0;display:flex;align-items:center;justify-content:center;background:#EAEAEA;border-radius:12px;border:2px solid #e0e0e0;box-shadow:-9px -9px 16px #fff,9px 9px 16px #d1d9e6;color:#ef4444;font-size:1.2rem;">✗</button>
-            </span>
-          </span>
-        `;
+        li.innerHTML = `<span>${f}</span><span><button data-idx="${idx}" class="confirm-friend-btn text-green-600 text-sm ml-2">Confirm</button><button data-idx="${idx}" class="decline-friend-btn text-red-500 text-sm ml-2">Decline</button></span>`;
         pendingList.appendChild(li);
       });
       // Confirm/Decline listeners
       pendingList.querySelectorAll('.confirm-friend-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
+        btn.addEventListener('click', (e) => {
           const idx = +e.target.dataset.idx;
-          const user = firebase.auth().currentUser;
-          if (!user) return;
-          const senderEmail = pendingRequests[idx];
-          // Remove from pendingRequests and add to friends in Firestore
-          try {
-            // Update your own doc
-            await db.collection('users').doc(user.uid).update({
-              pendingRequests: firebase.firestore.FieldValue.arrayRemove(senderEmail),
-              friends: firebase.firestore.FieldValue.arrayUnion(senderEmail)
-            });
-            // Add you to sender's friends
-            const usersRef = db.collection('users');
-            const q = await usersRef.where('email', '==', senderEmail).get();
-            if (!q.empty) {
-              const senderDoc = q.docs[0];
-              await usersRef.doc(senderDoc.id).update({
-                friends: firebase.firestore.FieldValue.arrayUnion(user.email)
-              });
-            }
-          } catch (err) {
-            alert('Error confirming friend: ' + (err.message || err));
-          }
+          friends.push(pendingRequests[idx]);
+          pendingRequests.splice(idx, 1);
+          saveFriends();
+          renderFriendList();
         });
       });
       pendingList.querySelectorAll('.decline-friend-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
+        btn.addEventListener('click', (e) => {
           const idx = +e.target.dataset.idx;
-          const user = firebase.auth().currentUser;
-          if (!user) return;
-          const senderEmail = pendingRequests[idx];
-          // Remove from pendingRequests in Firestore
-          try {
-            await db.collection('users').doc(user.uid).update({
-              pendingRequests: firebase.firestore.FieldValue.arrayRemove(senderEmail)
-            });
-          } catch (err) {
-            alert('Error declining friend: ' + (err.message || err));
-          }
+          pendingRequests.splice(idx, 1);
+          saveFriends();
+          renderPendingList();
         });
       });
     }
@@ -477,47 +457,21 @@
         addFriendError.style.display = '';
         return;
       }
-      const user = firebase.auth().currentUser;
-      if (!user) return;
-      if (user.email === val) {
-        addFriendError.textContent = 'You cannot add yourself.';
+      if (friends.includes(val)) {
+        addFriendError.textContent = 'Already in your friend list.';
         addFriendError.style.display = '';
         return;
       }
-      // Check if already a friend or already pending
-      db.collection('users').doc(user.uid).get().then(doc => {
-        const data = doc.data();
-        if (data && data.friends && data.friends.includes(val)) {
-          addFriendError.textContent = 'Already in your friend list.';
-          addFriendError.style.display = '';
-          return;
-        }
-        if (data && data.pendingRequests && data.pendingRequests.includes(val)) {
-          addFriendError.textContent = 'Already in pending requests.';
-          addFriendError.style.display = '';
-          return;
-        }
-        // Find user by email
-        db.collection('users').where('email', '==', val).get().then(q => {
-          if (q.empty) {
-            addFriendError.textContent = 'No user found with that email.';
-            addFriendError.style.display = '';
-            return;
-          }
-          const otherUserDoc = q.docs[0];
-          // Add your email to their pendingRequests
-          db.collection('users').doc(otherUserDoc.id).update({
-            pendingRequests: firebase.firestore.FieldValue.arrayUnion(user.email)
-          }).then(() => {
-            addFriendModal.style.display = 'none';
-            friendListModal.style.display = 'flex';
-            alert('Friend request sent!');
-          }).catch(err => {
-            addFriendError.textContent = 'Error sending request: ' + (err.message || err);
-            addFriendError.style.display = '';
-          });
-        });
-      });
+      if (pendingRequests.includes(val)) {
+        addFriendError.textContent = 'Already in pending requests.';
+        addFriendError.style.display = '';
+        return;
+      }
+      pendingRequests.push(val);
+      saveFriends();
+      addFriendModal.style.display = 'none';
+      friendListModal.style.display = 'flex';
+      renderFriendList();
     });
     addFriendInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmAddFriendBtn.click(); });
     // --- Custom Menu State ---
