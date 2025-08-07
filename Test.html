@@ -12,7 +12,9 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <!-- Firebase Auth -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-  <!-- Firestore compat -->
+  <!-- Firebase Storage -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+  <!-- Firebase Firestore -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <style>
     /* FLIX - Unique Display font for the title */
@@ -279,7 +281,7 @@
         <div class="w-full flex flex-col gap-3" style="max-width:260px;">
           <div class="flex flex-col items-center mb-2">
             <label for="account-edit-avatar" style="cursor:pointer;">
-              <span id="account-modal-avatar" style="width:64px;height:64px;display:inline-block;border-radius:50%;background:#ccc;overflow:hidden;"></span>
+              <span id="account-modal-avatar" style="width:64px;height:64px;display:inline-block;border-radius:50%;background:#ccc;overflow:hidden;border:2.5px solid #e0e0e0;box-shadow:0 2px 8px #e0e0e0;"></span>
               <input id="account-edit-avatar" type="file" accept="image/*" style="display:none;" />
             </label>
             <span class="text-xs text-gray-500 mt-1">Click avatar to change</span>
@@ -341,25 +343,13 @@
   </div>
   </div>
   <script>
-    // --- Firestore Friend List State ---
-    const db = firebase.firestore();
-    let friends = [];
-    let pendingRequests = [];
-    let userDocUnsub = null;
+    // --- Friend List State ---
+    let friends = JSON.parse(localStorage.getItem('friends') || '[]');
+    let pendingRequests = JSON.parse(localStorage.getItem('pendingRequests') || '[]');
 
-    function getUserDocRef(uid) {
-      return db.collection('users').doc(uid);
-    }
-    function listenToUserDoc() {
-      const user = getCurrentUserObj();
-      if (!user) return;
-      if (userDocUnsub) userDocUnsub();
-      userDocUnsub = getUserDocRef(user.uid).onSnapshot(doc => {
-        const data = doc.data() || {};
-        friends = data.friends || [];
-        pendingRequests = data.pendingRequests || [];
-        // renderFriendList(); (UI logic will be added in next step)
-      });
+    function saveFriends() {
+      localStorage.setItem('friends', JSON.stringify(friends));
+      localStorage.setItem('pendingRequests', JSON.stringify(pendingRequests));
     }
 
     function renderFriendList() {
@@ -400,25 +390,59 @@
       pendingRequests.forEach((f, idx) => {
         const li = document.createElement('li');
         li.className = 'flex items-center justify-between px-3 py-2 mb-1 bg-yellow-50 rounded shadow-sm';
-        li.innerHTML = `<span>${f}</span><span><button data-idx="${idx}" class="confirm-friend-btn text-green-600 text-sm ml-2">Confirm</button><button data-idx="${idx}" class="decline-friend-btn text-red-500 text-sm ml-2">Decline</button></span>`;
+        li.innerHTML = `
+          <span style="display:flex;align-items:center;gap:16px;width:100%;min-width:0;">
+            <span style="flex:1 1 auto;min-width:0;display:block;padding:4px 18px;font-size:1rem;border:1.5px solid #e0e0e0;border-radius:8px;background:#fff;color:#444;font-weight:500;text-align:left;">${f}</span>
+            <span style="flex-shrink:0;display:flex;gap:6px;">
+              <button data-idx="${idx}" title="Accept" class="confirm-friend-btn neumorph-btn" style="width:32px;height:32px;min-width:32px;min-height:32px;padding:0;display:flex;align-items:center;justify-content:center;background:#EAEAEA;border-radius:12px;border:2px solid #e0e0e0;box-shadow:-9px -9px 16px #fff,9px 9px 16px #d1d9e6;color:#22c55e;font-size:1.2rem;">✓</button>
+              <button data-idx="${idx}" title="Decline" class="decline-friend-btn neumorph-btn" style="width:32px;height:32px;min-width:32px;min-height:32px;padding:0;display:flex;align-items:center;justify-content:center;background:#EAEAEA;border-radius:12px;border:2px solid #e0e0e0;box-shadow:-9px -9px 16px #fff,9px 9px 16px #d1d9e6;color:#ef4444;font-size:1.2rem;">✗</button>
+            </span>
+          </span>
+        `;
         pendingList.appendChild(li);
       });
       // Confirm/Decline listeners
       pendingList.querySelectorAll('.confirm-friend-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+        btn.addEventListener('click', async (e) => {
           const idx = +e.target.dataset.idx;
-          friends.push(pendingRequests[idx]);
-          pendingRequests.splice(idx, 1);
-          saveFriends();
-          renderFriendList();
+          const user = firebase.auth().currentUser;
+          if (!user) return;
+          const senderEmail = pendingRequests[idx];
+          // Remove from pendingRequests and add to friends in Firestore
+          try {
+            // Update your own doc
+            await db.collection('users').doc(user.uid).update({
+              pendingRequests: firebase.firestore.FieldValue.arrayRemove(senderEmail),
+              friends: firebase.firestore.FieldValue.arrayUnion(senderEmail)
+            });
+            // Add you to sender's friends
+            const usersRef = db.collection('users');
+            const q = await usersRef.where('email', '==', senderEmail).get();
+            if (!q.empty) {
+              const senderDoc = q.docs[0];
+              await usersRef.doc(senderDoc.id).update({
+                friends: firebase.firestore.FieldValue.arrayUnion(user.email)
+              });
+            }
+          } catch (err) {
+            alert('Error confirming friend: ' + (err.message || err));
+          }
         });
       });
       pendingList.querySelectorAll('.decline-friend-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+        btn.addEventListener('click', async (e) => {
           const idx = +e.target.dataset.idx;
-          pendingRequests.splice(idx, 1);
-          saveFriends();
-          renderPendingList();
+          const user = firebase.auth().currentUser;
+          if (!user) return;
+          const senderEmail = pendingRequests[idx];
+          // Remove from pendingRequests in Firestore
+          try {
+            await db.collection('users').doc(user.uid).update({
+              pendingRequests: firebase.firestore.FieldValue.arrayRemove(senderEmail)
+            });
+          } catch (err) {
+            alert('Error declining friend: ' + (err.message || err));
+          }
         });
       });
     }
@@ -457,21 +481,47 @@
         addFriendError.style.display = '';
         return;
       }
-      if (friends.includes(val)) {
-        addFriendError.textContent = 'Already in your friend list.';
+      const user = firebase.auth().currentUser;
+      if (!user) return;
+      if (user.email === val) {
+        addFriendError.textContent = 'You cannot add yourself.';
         addFriendError.style.display = '';
         return;
       }
-      if (pendingRequests.includes(val)) {
-        addFriendError.textContent = 'Already in pending requests.';
-        addFriendError.style.display = '';
-        return;
-      }
-      pendingRequests.push(val);
-      saveFriends();
-      addFriendModal.style.display = 'none';
-      friendListModal.style.display = 'flex';
-      renderFriendList();
+      // Check if already a friend or already pending
+      db.collection('users').doc(user.uid).get().then(doc => {
+        const data = doc.data();
+        if (data && data.friends && data.friends.includes(val)) {
+          addFriendError.textContent = 'Already in your friend list.';
+          addFriendError.style.display = '';
+          return;
+        }
+        if (data && data.pendingRequests && data.pendingRequests.includes(val)) {
+          addFriendError.textContent = 'Already in pending requests.';
+          addFriendError.style.display = '';
+          return;
+        }
+        // Find user by email
+        db.collection('users').where('email', '==', val).get().then(q => {
+          if (q.empty) {
+            addFriendError.textContent = 'No user found with that email.';
+            addFriendError.style.display = '';
+            return;
+          }
+          const otherUserDoc = q.docs[0];
+          // Add your email to their pendingRequests
+          db.collection('users').doc(otherUserDoc.id).update({
+            pendingRequests: firebase.firestore.FieldValue.arrayUnion(user.email)
+          }).then(() => {
+            addFriendModal.style.display = 'none';
+            friendListModal.style.display = 'flex';
+            alert('Friend request sent!');
+          }).catch(err => {
+            addFriendError.textContent = 'Error sending request: ' + (err.message || err);
+            addFriendError.style.display = '';
+          });
+        });
+      });
     });
     addFriendInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmAddFriendBtn.click(); });
     // --- Custom Menu State ---
@@ -483,13 +533,14 @@
       apiKey: "AIzaSyDF27rWR0nSF-4kmOVZaznYezV-wKbDVV4",
       authDomain: "pieecardbase.firebaseapp.com",
       projectId: "pieecardbase",
-      storageBucket: "pieecardbase.firebasestorage.app",
+      storageBucket: "pieecardbase.appspot.com",
       messagingSenderId: "449979302495",
       appId: "1:449979302495:web:d429a49490d19ab9b351ea",
       measurementId: "G-NE1FTRM3XS"
     };
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
+    const db = firebase.firestore();
 
     // Google Login (Real)
     const googleLoginBtn = document.getElementById('google-login-btn');
@@ -568,9 +619,22 @@
     function updateAccountMenu() {
       const user = getCurrentUserObj();
       accountUsername.textContent = user && user.displayName ? user.displayName : (user && user.email ? user.email : 'Account');
-      // Avatar (custom avatar not supported in Firebase Auth by default)
-      accountAvatar.style.background = '#ccc';
-      accountAvatar.innerHTML = '';
+      // Avatar for account button
+      if (user && user.photoURL) {
+        accountAvatar.style.background = 'none';
+        accountAvatar.innerHTML = `<img src="${user.photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />`;
+      } else {
+        accountAvatar.style.background = '#ccc';
+        accountAvatar.innerHTML = '';
+      }
+      // Avatar for account modal
+      if (user && user.photoURL) {
+        accountModalAvatar.style.background = 'none';
+        accountModalAvatar.innerHTML = `<img src="${user.photoURL}" alt="avatar" style="width:100%;height:100%;object-fit:cover;display:block;" />`;
+      } else {
+        accountModalAvatar.innerHTML = '';
+        accountModalAvatar.style.background = '#ccc';
+      }
     }
 
     accountBtn.addEventListener('click', () => {
@@ -580,9 +644,14 @@
       accountEditUsername.value = user.displayName || '';
       accountEditEmail.value = user.email || '';
       accountEditPassword.value = '';
-      // Avatar (not supported)
-      accountModalAvatar.style.background = '#ccc';
-      accountModalAvatar.innerHTML = '';
+      // Avatar (now supported)
+      if (user.photoURL) {
+        accountModalAvatar.style.background = 'none';
+        accountModalAvatar.innerHTML = `<img src="${user.photoURL}" alt="avatar" style="width:100%;height:100%;object-fit:cover;display:block;" />`;
+      } else {
+        accountModalAvatar.innerHTML = '';
+        accountModalAvatar.style.background = '#ccc';
+      }
       // Dark mode
       accountDarkmode.checked = document.body.classList.contains('dark');
       hideAccountError();
@@ -593,18 +662,14 @@
       accountModal.style.display = 'none';
     });
     accountLogoutBtn.addEventListener('click', () => {
-      // Log out: show auth modal, hide main app
+      // Log out via Firebase Auth, UI will update via onAuthStateChanged
+      // Hide all modals and overlays, reset scroll position
       accountModal.style.display = 'none';
-      mainApp.style.display = 'none';
-      authModal.style.display = '';
-      signinForm.style.display = '';
-      signupForm.style.display = 'none';
-      forgotForm.style.display = 'none';
-      signinEmail.value = '';
-      signinPassword.value = '';
-      signinError.style.display = 'none';
-      currentUser = null;
-      setTimeout(() => signinEmail.focus(), 100);
+      if (typeof friendListModal !== 'undefined') friendListModal.style.display = 'none';
+      if (typeof addFriendModal !== 'undefined') addFriendModal.style.display = 'none';
+      if (typeof customMenuPopup !== 'undefined') customMenuPopup.style.display = 'none';
+      window.scrollTo(0, 0);
+      firebase.auth().signOut();
     });
     accountSaveBtn.addEventListener('click', () => {
       const user = getCurrentUserObj();
@@ -636,22 +701,70 @@
           if (error && error.message) showAccountError(error.message);
         });
     });
-    // Avatar upload
-    accountEditAvatar.addEventListener('change', (e) => {
+    // Avatar upload using imgbb API (free plan)
+    accountEditAvatar.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
+      const user = getCurrentUserObj();
+      if (!user) return;
+      // Show preview immediately
       const reader = new FileReader();
       reader.onload = function(evt) {
-        const user = getCurrentUserObj();
-        if (user) {
-          user.avatar = evt.target.result;
-          updateAccountMenu();
-        }
-        // Show in modal
         accountModalAvatar.style.background = 'none';
         accountModalAvatar.innerHTML = `<img src="${evt.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />`;
       };
       reader.readAsDataURL(file);
+
+      // Show loading indicator
+      const oldInner = accountModalAvatar.innerHTML;
+      accountModalAvatar.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;"><span style="font-size:1.5rem;">⏳</span></div>';
+
+      try {
+        // Convert file to base64
+        const toBase64 = file => new Promise((resolve, reject) => {
+          const fr = new FileReader();
+          fr.onload = () => resolve(fr.result.split(',')[1]);
+          fr.onerror = reject;
+          fr.readAsDataURL(file);
+        });
+        const base64 = await toBase64(file);
+        // imgbb API key (user provided)
+        const imgbbApiKey = '5ad675aaaa2339eff0552d2ad9401c1b';
+        const formData = new FormData();
+        formData.append('key', imgbbApiKey);
+        formData.append('image', base64);
+        // Upload to imgbb
+        const resp = await fetch('https://api.imgbb.com/1/upload', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await resp.json();
+        if (!data.success) throw new Error('Image upload failed: ' + (data.error?.message || 'Unknown error'));
+        const url = data.data.url;
+        // Save to Firestore user doc (create if missing)
+        const userDocRef = db.collection('users').doc(user.uid);
+        const userDoc = await userDocRef.get();
+        if (!userDoc.exists) {
+          await userDocRef.set({
+            email: user.email,
+            displayName: user.displayName || '',
+            friends: [],
+            pendingRequests: [],
+            photoURL: url
+          });
+        } else {
+          await userDocRef.update({ photoURL: url });
+        }
+        // Update Firebase Auth profile
+        await user.updateProfile({ photoURL: url });
+        updateAccountMenu();
+        accountModalAvatar.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />`;
+        alert('Profile photo updated!');
+      } catch (err) {
+        accountModalAvatar.innerHTML = oldInner;
+        alert('Error uploading photo: ' + (err.message || err));
+        console.error('Avatar upload error:', err);
+      }
     });
     // Dark mode toggle
     accountDarkmode.addEventListener('change', (e) => {
@@ -875,11 +988,30 @@
       signupInput.focus();
     });
 
-    // Optionally, focus input on load
+    // Show correct page based on Firebase login state
     window.addEventListener('DOMContentLoaded', () => {
-      signinForm.style.display = '';
-      signupForm.style.display = 'none';
-      signinEmail.focus();
+      // Hide both modals by default to prevent flash
+      authModal.style.display = 'none';
+      mainApp.style.display = 'none';
+      firebase.auth().onAuthStateChanged(function(user) {
+        if (user) {
+          // User is signed in, show main app
+          authModal.style.display = 'none';
+          mainApp.style.display = '';
+          updateAccountMenu();
+        } else {
+          // Not signed in, show login
+          mainApp.style.display = 'none';
+          // Always reset authModal to flex centering
+          authModal.style.display = 'flex';
+          authModal.style.alignItems = 'center';
+          authModal.style.justifyContent = 'center';
+          signinForm.style.display = '';
+          signupForm.style.display = 'none';
+          forgotForm.style.display = 'none';
+          signinEmail.focus();
+        }
+      });
     });
     // --- Data Structures ---
     const defaultPlayers = [
